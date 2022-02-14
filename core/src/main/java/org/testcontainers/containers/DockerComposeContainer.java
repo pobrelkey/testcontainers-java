@@ -83,6 +83,7 @@ public class DockerComposeContainer<SELF extends DockerComposeContainer<SELF>> e
     private boolean build = false;
     private Set<String> options = new HashSet<>();
     private boolean tailChildContainers;
+    private boolean copyDockerComposeFiles = false;
 
     private String project;
 
@@ -298,7 +299,7 @@ public class DockerComposeContainer<SELF extends DockerComposeContainer<SELF>> e
         if (localCompose) {
             dockerCompose = new LocalDockerCompose(composeFiles, project);
         } else {
-            dockerCompose = new ContainerisedDockerCompose(composeFiles, project);
+            dockerCompose = new ContainerisedDockerCompose(composeFiles, project, copyDockerComposeFiles);
         }
 
         dockerCompose
@@ -554,6 +555,37 @@ public class DockerComposeContainer<SELF extends DockerComposeContainer<SELF>> e
         return Optional.ofNullable(serviceInstanceMap.get(serviceName));
     }
 
+    /**
+     * <p>
+     *     Whether to copy the Docker Compose YAML files to the Docker
+     *     Compose container (when using containerized Docker Compose).
+     * </p><p>
+     *     By default, TestContainers will bind mount the parent directory of
+     *     your Docker Compose YAML files to expose them to the Docker
+     *     Compose container.  This is preferable for most scenarios, unless
+     *     you are running TestContainers from inside a container - in which
+     *     case, bind mounts will likely fail, as the path to your Docker
+     *     Compose YAML files within the container is unlikely to match the
+     *     path to these files from the perspective of the host OS.
+     * </p><p>
+     *     Setting this to true will tell TestContainers to copy your Docker
+     *     Compose YAML files - and everything under the directory that
+     *     contains them - to the Docker Compose container.  Do note that the
+     *     Docker socket will still be bind-mounted, and that its path in
+     *     your container is expected to match its path in the host OS.
+     * </p><p>
+     *     Most users of TestContainers should NOT need to set this option to
+     *     true.  (So this method has been given a long name, to discourage
+     *     casual use.)
+     * </p>
+     *
+     * @return this instance, for chaining
+     */
+    public SELF withCopyDockerComposeFilesToDockerComposeContainer(boolean copyDockerComposeFiles) {
+        this.copyDockerComposeFiles = copyDockerComposeFiles;
+        return self();
+    }
+
     private void followLogs(String containerId, Consumer<OutputFrame> consumer) {
         LogUtils.followOutput(DockerClientFactory.instance().client(), containerId, consumer);
     }
@@ -608,7 +640,7 @@ class ContainerisedDockerCompose extends GenericContainer<ContainerisedDockerCom
     public static final char UNIX_PATH_SEPERATOR = ':';
     public static final DockerImageName DEFAULT_IMAGE_NAME = DockerImageName.parse("docker/compose:1.29.2");
 
-    public ContainerisedDockerCompose(List<File> composeFiles, String identifier) {
+    public ContainerisedDockerCompose(List<File> composeFiles, String identifier, boolean copyDockerComposeFiles) {
 
         super(DEFAULT_IMAGE_NAME);
         addEnv(ENV_PROJECT_NAME, identifier);
@@ -627,7 +659,11 @@ class ContainerisedDockerCompose extends GenericContainer<ContainerisedDockerCom
         final String composeFileEnvVariableValue = Joiner.on(UNIX_PATH_SEPERATOR).join(absoluteDockerComposeFiles); // we always need the UNIX path separator
         logger().debug("Set env COMPOSE_FILE={}", composeFileEnvVariableValue);
         addEnv(ENV_COMPOSE_FILE, composeFileEnvVariableValue);
-        addFileSystemBind(pwd, containerPwd, READ_WRITE);
+        if (copyDockerComposeFiles) {
+            withCopyFileToContainer(MountableFile.forHostPath(pwd), containerPwd);
+        } else {
+            addFileSystemBind(pwd, containerPwd, READ_WRITE);
+        }
 
         // Ensure that compose can access docker. Since the container is assumed to be running on the same machine
         //  as the docker daemon, just mapping the docker control socket is OK.

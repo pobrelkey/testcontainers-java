@@ -31,22 +31,26 @@ public class DockerComposeOverridesTest {
     private static final String SERVICE_NAME = "alpine_1";
 
     private final boolean localMode;
+    private final boolean copyDockerComposeFiles;
     private final String expectedEnvVar;
     private final File[] composeFiles;
 
-    public DockerComposeOverridesTest(boolean localMode, String expectedEnvVar, File... composeFiles) {
+    public DockerComposeOverridesTest(boolean localMode, boolean copyDockerComposeFiles, String expectedEnvVar, File... composeFiles) {
         this.localMode = localMode;
+        this.copyDockerComposeFiles = copyDockerComposeFiles;
         this.expectedEnvVar = expectedEnvVar;
         this.composeFiles = composeFiles;
     }
 
-    @Parameters(name = "{index}: local[{0}], composeFiles[{2}], expectedEnvVar[{1}]")
+    @Parameters(name = "{index}: local[{0}], copyFiles[{1}], composeFiles[{3}], expectedEnvVar[{2}]")
     public static Iterable<Object[]> data() {
         return Arrays.asList(new Object[][]{
-            {true, BASE_ENV_VAR, new File[]{BASE_COMPOSE_FILE}},
-            {true, OVERRIDE_ENV_VAR, new File[]{BASE_COMPOSE_FILE, OVERRIDE_COMPOSE_FILE}},
-            {false, BASE_ENV_VAR, new File[]{BASE_COMPOSE_FILE}},
-            {false, OVERRIDE_ENV_VAR, new File[]{BASE_COMPOSE_FILE, OVERRIDE_COMPOSE_FILE}},
+            {true, false, BASE_ENV_VAR, new File[]{BASE_COMPOSE_FILE}},
+            {true, false, OVERRIDE_ENV_VAR, new File[]{BASE_COMPOSE_FILE, OVERRIDE_COMPOSE_FILE}},
+            {false, false, BASE_ENV_VAR, new File[]{BASE_COMPOSE_FILE}},
+            {false, false, OVERRIDE_ENV_VAR, new File[]{BASE_COMPOSE_FILE, OVERRIDE_COMPOSE_FILE}},
+            {false, true, BASE_ENV_VAR, new File[]{BASE_COMPOSE_FILE}},
+            {false, true, OVERRIDE_ENV_VAR, new File[]{BASE_COMPOSE_FILE, OVERRIDE_COMPOSE_FILE}},
         });
     }
 
@@ -64,6 +68,7 @@ public class DockerComposeOverridesTest {
         try (DockerComposeContainer compose =
                  new DockerComposeContainer(composeFiles)
                      .withLocalCompose(localMode)
+                     .withCopyDockerComposeFilesToDockerComposeContainer(copyDockerComposeFiles)
                      .withExposedService(SERVICE_NAME, SERVICE_PORT)) {
 
             compose.start();
